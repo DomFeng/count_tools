@@ -1,0 +1,400 @@
+import paramiko
+import configuration.setting as Setting
+
+"""
+远程控制深圳撮合，实现重启以及提取日志操作
+"""
+class getbacklog(object):
+    def __init__(self):
+        self.hostname = Setting.hf_hostname
+        self.port = Setting.hf_port
+        self.username = Setting.hf_username
+        self.password = Setting.hf_password
+        self.path = Setting.hf_path
+        #
+        # self.hostname ="172.20.0.58"
+        # self.port = 22
+        # self.username = "root"
+        # self.password = "NKUfnBTrh8FBEv$jxva9"
+        # self.path = "/home/logplayback_LoginAnd3P/LogPlayBack/bin/"
+
+    def search(self):
+        hostname = self.hostname
+        port = self.port
+        username = self.username
+        password = self.password
+
+        self.order_clordid_list = []
+        self.cancel_clordid_list = []
+
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, port, username, password, compress=True)
+        sftp_client = client.open_sftp()
+
+        path = self.path + "OrderRecord.txt"
+        remote_file = sftp_client.open(path)  # 文件路径
+        result = []
+        errnum_D = 0
+        acknum_D = 0
+        errnum_F = 0
+        acknum_F = 0
+        for line in remote_file:
+            listdata = line.strip().split()
+            if listdata[-1] == 'D' and listdata[-2] != '000000':
+                if listdata[-2] == '040101':
+                    self.order_clordid_list.append(listdata[7])
+                else:
+                    self.order_clordid_list.append(listdata[8])
+                errnum_D += 1
+            if listdata[-1] == 'D' and listdata[-2] == '000000':
+                if listdata[-2] == '040101':
+                    self.order_clordid_list.append(listdata[7])
+                else:
+                    self.order_clordid_list.append(listdata[8])
+                acknum_D += 1
+            if listdata[-1] == 'F' and listdata[-2] != '000000':
+                if listdata[-2] == '040101':
+                    self.cancel_clordid_list.append(listdata[7])
+                else:
+                    self.cancel_clordid_list.append(listdata[8])
+
+                errnum_F += 1
+            if listdata[-1] == 'F' and listdata[-2] == '000000':
+                if listdata[-2] == '040101':
+                    self.cancel_clordid_list.append(listdata[7])
+                else:
+                    self.cancel_clordid_list.append(listdata[8])
+
+                acknum_F += 1
+            if listdata[-1] == 'A':
+                print(line)
+
+            if listdata[-1] != 'F' and listdata[-1] != 'D' and listdata[-1] != '1' and listdata[-1] != '2' :
+                print(line)
+            result.append(listdata)
+        remote_file.close()
+
+        client.close()
+
+        print('##################  error_D num ' , errnum_D)
+        print('##################  ack_D num ' , acknum_D)
+        print('##################  error_F num ' , errnum_F)
+        print('##################  ack_F num ' , acknum_F)
+        print(errnum_F + acknum_F + errnum_D + acknum_D)
+
+        self.errnum_D = errnum_D
+        self.acknum_D = acknum_D
+        self.errnum_F = errnum_F
+        self.acknum_F = acknum_F
+
+        return result
+    def search_nc(self):
+        hostname = self.hostname
+        port = self.port
+        username = self.username
+        password = self.password
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, port, username, password, compress=True)
+        sftp_client = client.open_sftp()
+
+        path = self.path + "CapitalRecord.txt"
+        remote_file = sftp_client.open(path)  # 文件路径
+        result = [{},{},{}]
+        for line in remote_file:
+            listdata = line.strip().split()
+            # print(listdata)
+            if listdata[0] == 'Before_Capital':
+                result[0][listdata[1]] = [round(float(listdata[2]),2),round(float(listdata[3]),2)]
+            if listdata[0] == 'After_Capital' :
+                result[0][listdata[1]].extend([round(float(listdata[2]),2),round(float(listdata[3]),2)])
+            if listdata[0] == 'Before_Cache' and len(listdata) == 14:
+                result[1][(listdata[2],listdata[4])] = listdata[5:10]
+            if listdata[0] == 'After_Cache' and len(listdata) == 14:
+                result[2][(listdata[2], listdata[4])] = listdata[5:10]
+
+            if listdata[0] == 'Before_Cache' and len(listdata) == 13:
+                result[1][(listdata[1],listdata[3])] = listdata[4:9]
+            if listdata[0] == 'After_Cache' and len(listdata) == 13:
+                result[2][(listdata[1], listdata[3])] = listdata[4:9]
+
+        remote_file.close()
+        client.close()
+
+        return result
+    def search_que(self):
+        hostname = self.hostname
+        port = self.port
+        username = self.username
+        password = self.password
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, port, username, password, compress=True)
+        sftp_client = client.open_sftp()
+
+        path = self.path + "OrderAndCancelInfo.log"
+        remote_file = sftp_client.open(path)  # 文件路径
+        result = []
+        for line in remote_file:
+            listdata = line.strip()
+            clordid = listdata.split('11=')[1].split('')[0]
+            result.append(clordid)
+
+        remote_file.close()
+
+        client.close()
+        return result
+    def search_clord(self):
+        hostname = self.hostname
+        port = self.port
+        username = self.username
+        password = self.password
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, port, username, password, compress=True)
+        sftp_client = client.open_sftp()
+
+        path = self.path + "OrderRecord.txt"
+        remote_file = sftp_client.open(path)  # 文件路径
+        result = {}
+        for line in remote_file:
+            listdata = line.strip().split()
+            result[listdata[8]] = [listdata[-2],listdata[-1]]
+        remote_file.close()
+
+        client.close()
+        return result
+
+    def startlogback(self):
+        with open('./logbackprint.log','a',encoding='utf-8') as f:
+            hostname = self.hostname
+            port = self.port
+            username = self.username
+            password = self.password
+
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(hostname, port, username, password, compress=True)
+            stdin, stdout, stderr = client.exec_command('cd ' + self.path + ';./logplayback')  # stdout 为正确输出，stderr为错误输出，同时是有1个变量有值
+            print(stdout.read(),file = f)
+            print(stdout.read())
+
+            # client.close()
+    def drop(self):
+        hostname = self.hostname
+        port = self.port
+        username = self.username
+        password = self.password
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, port, username, password, compress=True)
+        stdin, stdout, stderr = client.exec_command('cd ' + self.path + ';rm -rf OrderRecord.txt')  # stdout 为正确输出，stderr为错误输出，同时是有1个变量有值
+        print(' --- 回放日志 - OrderRecord.txt - 文件已删除')
+        stdin, stdout, stderr = client.exec_command('cd ' + self.path + ';rm -rf CapitalRecord.txt')  # stdout 为正确输出，stderr为错误输出，同时是有1个变量有值
+        print(' --- 回放日志 - CapitalRecord.txt - 文件已删除')
+        stdin, stdout, stderr = client.exec_command('cd ' + self.path + ';rm -rf DoingRecord.txt')  # stdout 为正确输出，stderr为错误输出，同时是有1个变量有值
+        print(' --- 回放日志 - DoingRecord.txt - 文件已删除')
+        stdin, stdout, stderr = client.exec_command('cd ' + self.path + ';rm -rf Result.txt')  # stdout 为正确输出，stderr为错误输出，同时是有1个变量有值
+        print(' --- 回放日志 - Result.txt - 文件已删除')
+        stdin, stdout, stderr = client.exec_command('cd ' + self.path + ';rm -rf ../log/bin/TradeApi*')  # stdout 为正确输出，stderr为错误输出，同时是有1个变量有值
+        print(' --- 回放日志 - TradeApi.log - 文件已删除')
+        stdin, stdout, stderr = client.exec_command('cd ' + self.path + ';rm -rf log')  # stdout 为正确输出，stderr为错误输出，同时是有1个变量有值
+        print(' --- 回放日志 - log - 文件夹已删除')
+        client.close()
+
+    def analysis(self):
+        self.logfullfilldic = {}
+        backlogdata = self.search()
+        lenlist = []
+        for x in backlogdata:
+            lenlist.append(len(x))
+        print(set(lenlist))
+
+        acknum = 0
+        confirmnum = 0
+        pendingcancelnum = 0
+        cancelnum = 0
+        fillnum = 0
+        allfillnum = 0
+        rejectnum = 0
+
+        fillresult = {}
+
+        self.rejectlist = []
+        self.cancel_errlist = []
+
+
+        order_cancel_confdic = {
+            "order":{},
+            "cancel":{}
+        }
+
+        order_conflist = []
+        cancel_conflist = []
+
+        for data in backlogdata:
+            if data[-1] == 'D':
+                order_cancel_confdic['order'][data[8]] = data[7]
+                order_conflist.append(data[7])
+            elif data[-1] == 'F':
+                order_cancel_confdic['cancel'][data[8]] = data[7]
+                cancel_conflist.append(data[7])
+            else:
+                pass
+
+
+        for data in backlogdata:
+
+
+            if data[-1] == '1' and data[12] == 'Pending_Dealing':
+                if data[7] not in fillresult:
+                    confirmnum += 1
+                    fillresult[data[7]] = [int(data[9]), 0, int(data[11])]
+                else:
+                    fillresult[data[7]][0] = int(data[9])
+
+            if data[-1] == '1' and data[12] == 'Rejected':
+                if data[-2] != '20078' and data[-2] != 'Rejected':
+                    self.cancel_errlist.append([data[7],data[-2]])
+                    if data[7] in fillresult:
+                        pass
+                    else:
+                        fillresult[data[7]] = [int(data[9]), int(data[10]), int(data[11])]
+                        rejectnum += 1
+
+                else:
+                    self.rejectlist.append(data[7])
+                    # rejectnum += 1
+
+                    if data[7] not in fillresult:
+                        rejectnum += 1
+                        fillresult[data[7]] = [int(data[9]), 0, int(data[11])]
+                    else:
+                        fillresult[data[7]] = [int(data[9]), 0, int(data[11])]
+
+
+            if data[-1] == '1' and data[-2] == 'Pending_Cancel':
+                pendingcancelnum += 1
+            if data[-1] == '1' and data[-2] == 'Partially_Pending_Cancel':
+                pendingcancelnum += 1
+            if data[-1] == '1' and data[-3] == 'Partially_Cancelled':
+                try:
+                    cancelnum += 1
+                    cont = order_cancel_confdic['order'][data[-2]]
+                    if cont not in fillresult:
+                        fillresult[cont] = [int(data[9]), 0, int(data[11])]
+                    else:
+                        fillresult[cont][2] += int(data[11])
+                except:
+                    # print(data)
+                    pass
+            if data[-1] == '1' and data[-3] == 'Cancelled':
+                try:
+                    cont = order_cancel_confdic['order'][data[-2]]
+
+                    if cont not in fillresult:
+                        confirmnum += 1
+                        fillresult[cont] = [int(data[9]), 0, int(data[11])]
+                    else:
+                        fillresult[cont][2] = int(data[11])
+                except:
+                    # print(data)
+                    pass
+
+
+            if data[-1] == '2':
+                allfillnum += 1
+                if data[7] not in fillresult:
+                    fillresult[data[7]] = [int(data[-6]), int(data[-5]), int(data[-4])]
+                else:
+                    fillresult[data[7]][1] += int(data[-5])
+
+                if data[7] not in self.logfullfilldic:
+                    self.logfullfilldic[data[7]] = 0
+                    self.logfullfilldic[data[7]] += 1
+                else:
+                    self.logfullfilldic[data[7]] += 1
+
+
+
+        for cont in fillresult:
+            if fillresult[cont][0] == fillresult[cont][1]:
+                fillnum += 1
+
+        self.confirmnum  =  fillresult.__len__() - rejectnum
+        self.pendingcancelnum = pendingcancelnum
+        self.cancelednum = cancelnum
+        self.fillnum = fillnum
+        self.allfillnum = allfillnum
+        self.rejectednum = rejectnum
+
+        print('回放日志确认笔数', self.confirmnum)
+        print('回放日志撤单确认笔数', pendingcancelnum)
+        print('回放日志撤单撤成笔数', cancelnum)
+        print('回放日志全成交笔数', fillnum)
+        print('回放日志分笔成交总笔数', allfillnum)
+        print('回放日志非法笔数', rejectnum)
+
+        return fillresult
+
+    def get_confirm(self):
+        backlogdata = self.search()
+        lenlist = []
+        for x in backlogdata:
+            lenlist.append(len(x))
+        print(set(lenlist))
+        result = []
+        for data in backlogdata:
+            if data[-1] == '1' and data[-2] == 'Pending_Dealing':
+                result.append(data[7])
+
+        return set(result)
+
+    def search_doing(self):
+        hostname = self.hostname
+        port = self.port
+        username = self.username
+        password = self.password
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(hostname, port, username, password, compress=True)
+        sftp_client = client.open_sftp()
+
+        path = self.path + "DoingRecord.txt"
+        remote_file = sftp_client.open(path)  # 文件路径
+        result = {}
+
+        for line in remote_file:
+            listdata = line.strip().split()
+            if listdata[-1] in ['Partially_Filled','Pending_Dealing',"Partially_Pending_Cancel"]:
+                result[listdata[7]] = [int(listdata[8]),int(listdata[9]),int(listdata[10])]
+        remote_file.close()
+        client.close()
+        self.doingdata = result
+        return result
+
+if __name__ == "__main__":
+    res = getbacklog()
+    # res.drop()
+    # res.startlogback()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
